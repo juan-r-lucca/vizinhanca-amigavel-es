@@ -10,4 +10,5 @@ export * from './grupo.model';
 export * from './mensagem.model';
 export * from './localizacao-mapa.model';
 export * from './item-achado-perdido.model';
+export * from './agenda.model';
 

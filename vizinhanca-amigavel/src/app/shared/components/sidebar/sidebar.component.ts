@@ -27,7 +27,7 @@ interface MenuItem {
 
       <nav class="sidebar-nav">
         <ul class="menu-list">
-          <li *ngFor="let item of menuItems" class="menu-item">
+          <li *ngFor="let item of menuItems()" class="menu-item">
             <a 
               [routerLink]="item.path" 
               routerLinkActive="active"
@@ -371,16 +371,8 @@ export class SidebarComponent {
   private lastCondominioId?: number;
   logoutError = signal<string | null>(null);
 
-  menuItems: MenuItem[] = [
-    { label: 'Mural', path: '/mural', icon: 'bi-clipboard' },
-    { label: 'Grupos', path: '/grupos', icon: 'bi-people' },
-    { label: 'Mensagens', path: '/mensagens', icon: 'bi-chat-dots' },
-    { label: 'Achados e Perdidos', path: '/achados-perdidos', icon: 'bi-search' },
-    { label: 'Encomendas', path: '/encomendas', icon: 'bi-box' },
-    { label: 'Ajuda Mútua', path: '/ajuda-mutua', icon: 'bi-heart' },
-    { label: 'Mapa', path: '/mapa', icon: 'bi-geo-alt' },
-    { label: 'Meu Perfil', path: '/perfil', icon: 'bi-person' }
-  ];
+  menuItems = signal<MenuItem[]>([]);
+  temComunidade = signal(false);
 
   constructor() {
     // Load collapsed state from localStorage
@@ -400,30 +392,74 @@ export class SidebarComponent {
         });
     }
 
-    // Atualiza o nome do condomínio quando o usuário mudar
+    // Atualiza o nome do condomínio e menu quando o usuário mudar
     effect(() => {
       const user = this.currentUser();
 
       if (!user) {
         this.condominioNome.set('Vizinhança Amigável');
         this.lastCondominioId = undefined;
+        this.temComunidade.set(false);
+        this.atualizarMenuItems(false);
         return;
       }
 
-      if (user.condominio?.nome) {
-        this.condominioNome.set(user.condominio.nome);
-        this.lastCondominioId = user.condominio.id;
-        return;
-      }
+      const temComunidade = !!user.id_condominio;
+      this.temComunidade.set(temComunidade);
 
-      if (user.id_condominio && user.id_condominio !== this.lastCondominioId) {
-        this.lastCondominioId = user.id_condominio;
-        this.fetchCondominioName(user.id_condominio);
-      } else if (!user.id_condominio) {
+      if (temComunidade) {
+        // Menu completo quando tem comunidade
+        this.atualizarMenuItems(true);
+
+        if (user.condominio?.nome) {
+          this.condominioNome.set(user.condominio.nome);
+          this.lastCondominioId = user.condominio.id;
+          return;
+        }
+
+        if (user.id_condominio && user.id_condominio !== this.lastCondominioId) {
+          this.lastCondominioId = user.id_condominio;
+          this.fetchCondominioName(user.id_condominio);
+        }
+      } else {
+        // Menu limitado quando não tem comunidade
+        this.atualizarMenuItems(false);
         this.condominioNome.set('Vizinhança Amigável');
         this.lastCondominioId = undefined;
       }
     });
+  }
+
+  private atualizarMenuItems(temComunidade: boolean): void {
+    const user = this.currentUser();
+    const ehSindico = user?.perfil === 'sindico';
+
+    if (temComunidade) {
+      const items: MenuItem[] = [
+        { label: 'Mural', path: '/mural', icon: 'bi-clipboard' },
+        { label: 'Grupos', path: '/grupos', icon: 'bi-people' },
+        { label: 'Mensagens', path: '/mensagens', icon: 'bi-chat-dots' },
+        { label: 'Achados e Perdidos', path: '/achados-perdidos', icon: 'bi-search' },
+        { label: 'Encomendas', path: '/encomendas', icon: 'bi-box' },
+        { label: 'Ajuda Mútua', path: '/ajuda-mutua', icon: 'bi-heart' },
+        { label: 'Agenda', path: '/agenda', icon: 'bi-calendar' },
+        { label: 'Mapa', path: '/mapa', icon: 'bi-geo-alt' }
+      ];
+
+      // Adiciona aba de gerar convite se for síndico
+      if (ehSindico) {
+        items.push({ label: 'Gerar Convite', path: '/gerar-convite', icon: 'bi-envelope-paper' });
+      }
+
+      items.push({ label: 'Meu Perfil', path: '/perfil', icon: 'bi-person' });
+
+      this.menuItems.set(items);
+    } else {
+      this.menuItems.set([
+        { label: 'Entrar com Convite', path: '/entrar-com-convite', icon: 'bi-link' },
+        { label: 'Meu Perfil', path: '/perfil', icon: 'bi-person' }
+      ]);
+    }
   }
 
   toggleCollapse(): void {

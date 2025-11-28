@@ -151,6 +151,33 @@ export class UsuarioService {
   }
 
   /**
+   * Busca vizinhos (usuários do mesmo condomínio, excluindo o próprio usuário)
+   */
+  async findVizinhos(idUsuario: string, idCondominio?: number): Promise<CrudResponse<Usuario[]>> {
+    const filters: any[] = [
+      { column: 'id', operator: 'neq', value: idUsuario }
+    ];
+
+    // Se idCondominio não foi fornecido, busca do usuário atual
+    if (!idCondominio) {
+      const currentUserResponse = await this.findById(idUsuario, false);
+      if (currentUserResponse.error || !currentUserResponse.data?.id_condominio) {
+        return { data: [], error: null };
+      }
+      idCondominio = currentUserResponse.data.id_condominio;
+    }
+
+    if (idCondominio) {
+      filters.push({ column: 'id_condominio', operator: 'eq', value: idCondominio });
+    }
+
+    return this.crudService.findAll<Usuario>('usuario', {
+      filters,
+      select: 'id, nome, email, unidade, foto_url, perfil, verificado'
+    });
+  }
+
+  /**
    * Busca usuários verificados
    */
   async findVerified(): Promise<CrudResponse<Usuario[]>> {

@@ -67,6 +67,10 @@ export const routes: Routes = [
         loadComponent: () => import('./features/ajuda-mutua/lista/lista-ajuda-mutua.component').then(m => m.ListaAjudaMutuaComponent)
       },
       {
+        path: 'agenda',
+        loadComponent: () => import('./features/agenda/lista/lista-agenda.component').then(m => m.ListaAgendaComponent)
+      },
+      {
         path: 'mapa',
         loadComponent: () => import('./features/mapa/mapa-colaborativo/mapa-colaborativo.component').then(m => m.MapaColaborativoComponent)
       },
@@ -79,8 +83,16 @@ export const routes: Routes = [
         loadComponent: () => import('./features/condominio/sem-comunidade/sem-comunidade.component').then(m => m.SemComunidadeComponent)
       },
       {
+        path: 'entrar-com-convite',
+        loadComponent: () => import('./features/condominio/entrar-com-convite/entrar-com-convite.component').then(m => m.EntrarComConviteComponent)
+      },
+      {
         path: 'condominio/criar',
         loadComponent: () => import('./features/condominio/criar/condominio-onboarding.component').then(m => m.CondominioOnboardingComponent)
+      },
+      {
+        path: 'gerar-convite',
+        loadComponent: () => import('./features/condominio/gerar-convite/gerar-convite.component').then(m => m.GerarConviteComponent)
       },
       {
         path: 'convite/:id',

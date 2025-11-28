@@ -17,18 +17,72 @@ export class EncomendaService {
    * Busca todas as encomendas
    */
   async findAll(options?: any): Promise<CrudResponse<Encomenda[]>> {
-    return this.crudService.findAll<Encomenda>('encomenda', {
+    // Tenta com relacionamento primeiro, mas se falhar, tenta sem
+    const selectWithRelation = options?.select || '*, usuario:usuario!id_usuario(id, nome, unidade)';
+    
+    const response = await this.crudService.findAll<Encomenda>('encomenda', {
       ...options,
-      select: options?.select || '*, usuario:usuario(id, nome, unidade)',
+      select: selectWithRelation,
       orderBy: options?.orderBy || [{ column: 'data_criacao', ascending: false }]
     });
+
+    // Se falhou por causa de relacionamento, tenta sem relacionamento
+    if (response.error && (response.error.message?.includes('relation') || 
+                           response.error.message?.includes('foreign key') ||
+                           response.error.message?.includes('column'))) {
+      return this.crudService.findAll<Encomenda>('encomenda', {
+        ...options,
+        select: options?.select || '*',
+        orderBy: options?.orderBy || [{ column: 'data_criacao', ascending: false }]
+      });
+    }
+
+    return response;
   }
 
   /**
    * Busca encomenda por ID
    */
   async findById(id: number): Promise<CrudResponse<Encomenda>> {
-    return this.crudService.findById<Encomenda>('encomenda', id, '*, usuario:usuario(id, nome, unidade)');
+    // Tenta buscar diretamente sem relacionamento primeiro
+    // Isso evita problemas com políticas RLS em relacionamentos
+    const basicResponse = await this.crudService.findById<Encomenda>('encomenda', id, '*');
+    
+    // Se encontrou o registro básico, tenta enriquecer com relacionamento
+    if (!basicResponse.error && basicResponse.data) {
+      // Tenta buscar com relacionamento, mas se falhar, retorna os dados básicos
+      try {
+        const responseWithRelation = await this.crudService.findById<Encomenda>(
+          'encomenda', 
+          id, 
+          '*, usuario:usuario!id_usuario(id, nome, unidade)'
+        );
+        
+        // Se conseguiu buscar com relacionamento, retorna
+        if (!responseWithRelation.error && responseWithRelation.data) {
+          return responseWithRelation;
+        }
+        
+        // Se falhou mas não é erro crítico (relacionamento), retorna os dados básicos
+        if (responseWithRelation.error && 
+            (responseWithRelation.error.message?.includes('relation') ||
+             responseWithRelation.error.message?.includes('foreign key') ||
+             responseWithRelation.error.message?.includes('column') ||
+             responseWithRelation.error.message?.includes('permission'))) {
+          // Retorna os dados básicos - o componente pode lidar com usuario sendo undefined
+          return basicResponse;
+        }
+      } catch (error) {
+        // Se houver exceção, retorna os dados básicos
+        return basicResponse;
+      }
+    }
+    
+    // Se não encontrou o registro básico, pode ser:
+    // 1. Registro não existe
+    // 2. Bloqueado por RLS (usuário não verificado ou não está no mesmo condomínio)
+    // A mensagem de erro já foi melhorada no BaseCrudService para indicar isso
+    return basicResponse;
   }
 
   /**
@@ -95,4 +149,5 @@ export class EncomendaService {
     });
   }
 }
+
 

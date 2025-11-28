@@ -19,7 +19,7 @@ export class MensagemService {
   async findAll(options?: any): Promise<CrudResponse<Mensagem[]>> {
     return this.crudService.findAll<Mensagem>('mensagem', {
       ...options,
-      select: options?.select || '*, usuario_origem:usuario!mensagem_id_usuario_origem_fkey(id, nome, foto_url), usuario_destino:usuario!mensagem_id_usuario_destino_fkey(id, nome, foto_url)',
+      select: options?.select || '*, usuario_origem:usuario!id_usuario_origem(id, nome, foto_url), usuario_destino:usuario!id_usuario_destino(id, nome, foto_url)',
       orderBy: options?.orderBy || [{ column: 'data_criacao', ascending: true }]
     });
   }
@@ -28,7 +28,15 @@ export class MensagemService {
    * Busca mensagem por ID
    */
   async findById(id: number): Promise<CrudResponse<Mensagem>> {
-    return this.crudService.findById<Mensagem>('mensagem', id, '*, usuario_origem:usuario!mensagem_id_usuario_origem_fkey(id, nome, foto_url), usuario_destino:usuario!mensagem_id_usuario_destino_fkey(id, nome, foto_url)');
+    // Tenta com relacionamento primeiro
+    const responseWithRelation = await this.crudService.findById<Mensagem>('mensagem', id, '*, usuario_origem:usuario!id_usuario_origem(id, nome, foto_url), usuario_destino:usuario!id_usuario_destino(id, nome, foto_url)');
+    
+    // Se falhar, tenta sem relacionamento
+    if (responseWithRelation.error && (responseWithRelation.error.message?.includes('relation') || responseWithRelation.error.message?.includes('column'))) {
+      return this.crudService.findById<Mensagem>('mensagem', id);
+    }
+    
+    return responseWithRelation;
   }
 
   /**
@@ -120,22 +128,39 @@ export class MensagemService {
    * Busca conversas do usuário
    */
   async findConversas(idUsuario: string): Promise<CrudResponse<Conversa[]>> {
-    // Busca todas as mensagens onde o usuário participa
-    const response = await this.findAll({
+    // Busca mensagens onde o usuário é origem
+    const responseOrigem = await this.findAll({
       filters: [
-        { column: 'id_usuario_origem', operator: 'eq', value: idUsuario },
+        { column: 'id_usuario_origem', operator: 'eq', value: idUsuario }
+      ]
+    });
+
+    // Busca mensagens onde o usuário é destino
+    const responseDestino = await this.findAll({
+      filters: [
         { column: 'id_usuario_destino', operator: 'eq', value: idUsuario }
       ]
     });
 
-    if (response.error || !response.data) {
+    // Combina os resultados
+    const todasMensagens: Mensagem[] = [];
+    
+    if (!responseOrigem.error && responseOrigem.data) {
+      todasMensagens.push(...responseOrigem.data);
+    }
+    
+    if (!responseDestino.error && responseDestino.data) {
+      todasMensagens.push(...responseDestino.data);
+    }
+
+    if (todasMensagens.length === 0) {
       return { data: [], error: null };
     }
 
     // Agrupa por usuário e retorna última mensagem
     const conversasMap = new Map<string, Conversa>();
 
-    response.data.forEach(msg => {
+    todasMensagens.forEach(msg => {
       const outroUsuarioId = msg.id_usuario_origem === idUsuario 
         ? msg.id_usuario_destino 
         : msg.id_usuario_origem;
@@ -143,8 +168,8 @@ export class MensagemService {
       if (!conversasMap.has(outroUsuarioId)) {
         conversasMap.set(outroUsuarioId, {
           usuario: msg.id_usuario_origem === idUsuario 
-            ? (msg.usuario_destino || { id: outroUsuarioId, nome: '' })
-            : (msg.usuario_origem || { id: outroUsuarioId, nome: '' }),
+            ? (msg.usuario_destino || { id: outroUsuarioId, nome: 'Usuário' })
+            : (msg.usuario_origem || { id: outroUsuarioId, nome: 'Usuário' }),
           ultima_mensagem: msg,
           nao_lidas_count: 0
         });

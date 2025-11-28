@@ -34,6 +34,11 @@ import { LoadingSpinnerComponent, ErrorMessageComponent } from '../../../shared/
             [error]="error()" 
             title="Erro ao reportar item">
           </app-error-message>
+          
+          <div class="info-message" *ngIf="infoMessage()">
+            <i class="bi bi-info-circle"></i>
+            <span>{{ infoMessage() }}</span>
+          </div>
 
           <form (ngSubmit)="onSubmit()" #itemForm="ngForm">
             <div class="form-group">
@@ -537,6 +542,29 @@ import { LoadingSpinnerComponent, ErrorMessageComponent } from '../../../shared/
       padding: var(--spacing-lg);
       border-top: 1px solid var(--border-color);
     }
+
+    .info-message {
+      display: flex;
+      align-items: center;
+      gap: var(--spacing-sm);
+      padding: var(--spacing-md);
+      background-color: rgba(52, 152, 219, 0.1);
+      border: 1px solid rgba(52, 152, 219, 0.3);
+      border-radius: 6px;
+      color: var(--accent-primary);
+      margin-bottom: var(--spacing-md);
+      font-size: var(--font-size-sm);
+    }
+
+    .info-message i {
+      font-size: 1.2rem;
+      flex-shrink: 0;
+    }
+
+    .info-message span {
+      flex: 1;
+      line-height: 1.5;
+    }
   `]
 })
 export class ReportarItemModalComponent implements OnDestroy {
@@ -562,6 +590,7 @@ export class ReportarItemModalComponent implements OnDestroy {
   uploadingImage = signal(false);
   loading = signal(false);
   error = signal<string | null>(null);
+  infoMessage = signal<string | null>(null);
   showCamera = signal(false);
   private cameraStream: MediaStream | null = null;
 
@@ -727,6 +756,7 @@ export class ReportarItemModalComponent implements OnDestroy {
 
     this.loading.set(true);
     this.error.set(null);
+    this.infoMessage.set(null);
 
     let fotoUrl = this.foto_url.trim() || undefined;
 
@@ -740,13 +770,28 @@ export class ReportarItemModalComponent implements OnDestroy {
       );
 
       if (uploadResult.error) {
-        this.error.set(uploadResult.error.message || 'Erro ao fazer upload da imagem');
-        this.loading.set(false);
-        this.uploadingImage.set(false);
-        return;
+        // Se o erro for de bucket não encontrado, permite continuar sem a imagem
+        const isBucketNotFound = uploadResult.error.message?.includes('Bucket') && 
+                                 uploadResult.error.message?.includes('não encontrado');
+        
+        if (isBucketNotFound) {
+          // Avisa o usuário mas permite continuar sem a imagem
+          this.infoMessage.set('Bucket de armazenamento não configurado. O item será reportado sem foto. Para habilitar upload de imagens, execute o script SQL em database/storage-buckets.sql no Supabase.');
+          fotoUrl = undefined;
+          this.selectedFile = null;
+          this.imagePreview.set(null);
+        } else {
+          // Para outros erros, para o processo
+          this.error.set(uploadResult.error.message || 'Erro ao fazer upload da imagem');
+          this.loading.set(false);
+          this.uploadingImage.set(false);
+          return;
+        }
+      } else {
+        fotoUrl = uploadResult.data?.url;
+        this.infoMessage.set(null); // Limpa mensagem informativa se upload foi bem-sucedido
       }
-
-      fotoUrl = uploadResult.data?.url;
+      
       this.uploadingImage.set(false);
     }
 

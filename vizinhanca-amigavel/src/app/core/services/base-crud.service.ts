@@ -143,11 +143,70 @@ export class BaseCrudService {
       const { data, error } = await query;
 
       if (error) {
+        // Se o erro for relacionado a relacionamento, tenta buscar sem relacionamento primeiro
+        if (error.message?.includes('relation') || 
+            error.message?.includes('foreign key') ||
+            error.message?.includes('column')) {
+          // Tenta buscar apenas os dados básicos
+          const basicQuery = this.client
+            .from(tableName)
+            .select('*')
+            .eq('id', id)
+            .limit(1);
+          
+          const { data: basicData, error: basicError } = await basicQuery;
+          
+          if (basicError) {
+            // Se o erro básico também falhar, verifica se é problema de RLS
+            const basicErrorMsg = basicError.message?.toLowerCase() || '';
+            if (basicErrorMsg.includes('permission') || 
+                basicErrorMsg.includes('policy') || 
+                basicErrorMsg.includes('row-level security')) {
+              return { 
+                data: null, 
+                error: new Error(`Sem permissão para acessar o registro na tabela ${tableName} com id ${id}. Verifique se você está autenticado e verificado.`)
+              };
+            }
+            return { data: null, error: new Error(basicError.message) };
+          }
+          
+          if (!basicData || basicData.length === 0) {
+            return {
+              data: null,
+              error: new Error(`Registro não encontrado na tabela ${tableName} com id ${id}`)
+            };
+          }
+          
+          return { data: basicData[0] as T, error: null };
+        }
+        
+        // Verifica se é erro de RLS/permissão
+        const errorMsg = error.message?.toLowerCase() || '';
+        if (errorMsg.includes('permission') || 
+            errorMsg.includes('policy') || 
+            errorMsg.includes('row-level security') ||
+            errorMsg.includes('new row violates')) {
+          return { 
+            data: null, 
+            error: new Error(`Sem permissão para acessar o registro na tabela ${tableName} com id ${id}. Verifique se você está autenticado e verificado.`)
+          };
+        }
+        
         return { data: null, error: new Error(error.message) };
       }
       
-      // Se não encontrou nenhum registro, retorna erro apropriado
+      // Se não encontrou nenhum registro, pode ser que:
+      // 1. O registro realmente não existe
+      // 2. O registro existe mas está bloqueado por RLS (política de segurança)
       if (!data || data.length === 0) {
+        // Para tabelas com RLS baseado em condomínio, mensagem mais específica
+        if (tableName === 'encomenda' || tableName === 'aviso' || tableName === 'ajuda_mutua') {
+          return {
+            data: null,
+            error: new Error(`Registro não encontrado ou sem permissão para acessar na tabela ${tableName} com id ${id}. Verifique se você está autenticado, verificado e no mesmo condomínio.`)
+          };
+        }
+        
         return {
           data: null,
           error: new Error(`Registro não encontrado na tabela ${tableName} com id ${id}`)
@@ -156,6 +215,15 @@ export class BaseCrudService {
       
       // Retorna o primeiro resultado
       const result = data[0];
+      
+      // Verifica se o resultado é null (pode acontecer com relacionamentos)
+      if (result === null) {
+        return {
+          data: null,
+          error: new Error(`Registro não encontrado na tabela ${tableName} com id ${id}`)
+        };
+      }
+      
       return { data: result as T, error: null };
     } catch (error) {
       return {

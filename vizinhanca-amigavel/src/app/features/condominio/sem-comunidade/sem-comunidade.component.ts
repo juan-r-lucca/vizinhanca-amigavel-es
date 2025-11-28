@@ -24,7 +24,10 @@ import { LoadingSpinnerComponent } from '../../../shared/components';
         </p>
 
         <div class="actions">
-          <button type="button" class="btn btn-primary" (click)="irParaPerfil()">
+          <button type="button" class="btn btn-primary" (click)="irParaEntrarComConvite()">
+            <i class="bi bi-link"></i> Entrar com Link de Convite
+          </button>
+          <button type="button" class="btn btn-secondary" (click)="irParaPerfil()">
             Ver meu perfil
           </button>
           <button type="button" class="btn btn-secondary" (click)="atualizar()">
@@ -210,6 +213,10 @@ export class SemComunidadeComponent implements OnInit {
 
   irParaCriacaoCondominio(): void {
     this.router.navigate(['/condominio/criar']);
+  }
+
+  irParaEntrarComConvite(): void {
+    this.router.navigate(['/entrar-com-convite']);
   }
 }
 

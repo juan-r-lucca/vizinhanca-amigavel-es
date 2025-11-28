@@ -1,4 +1,4 @@
-import { Component, inject } from '@angular/core';
+import { Component, inject, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterOutlet } from '@angular/router';
 import { SidebarComponent } from '../../shared/components/sidebar/sidebar.component';
@@ -11,10 +11,10 @@ import { SidebarService } from '../../core/services/sidebar.service';
   imports: [CommonModule, RouterOutlet, SidebarComponent],
   template: `
     <div class="layout-container">
-      <app-sidebar *ngIf="authService.isAuthenticated()"></app-sidebar>
+      <app-sidebar *ngIf="authService.isAuthenticated() && temComunidade()"></app-sidebar>
       <main 
         class="main-content" 
-        [class.with-sidebar]="authService.isAuthenticated()"
+        [class.with-sidebar]="authService.isAuthenticated() && temComunidade()"
         [class.sidebar-collapsed]="sidebarService.collapsed()">
         <router-outlet />
       </main>
@@ -60,4 +60,9 @@ import { SidebarService } from '../../core/services/sidebar.service';
 export class MainLayoutComponent {
   authService = inject(AuthService);
   sidebarService = inject(SidebarService);
+
+  temComunidade = computed(() => {
+    const user = this.authService.currentUser();
+    return !!user?.id_condominio;
+  });
 }
